@@ -18,4 +18,4 @@ instance_count: 1
 # --- NEW: Add credentials for Content Safety ---
 environment_variables:
   CONTENT_SAFETY_ENDPOINT: "https://contet-filtering.cognitiveservices.azure.com/"
-  CONTENT_SAFETY_KEY: "3fPYAI3uRSazcArssns99sg0XtaMYdIjAgq7t50OBvw3tiCDn4qEJQQJ99BLACqBBLyXJ3w3AAAHACOG9qqN"
+  CONTENT_SAFETY_KEY: "put_ur_API_key_here"

@@ -1,0 +1,21 @@
+$schema: https://azuremlschemas.azureedge.net/latest/managedOnlineDeployment.schema.json
+name: blue
+endpoint_name: distil-bert-endpoint
+
+model: azureml:distil-bert-final-model:1
+
+code_configuration:
+  code: ./
+  scoring_script: score.py
+
+environment:
+  image: mcr.microsoft.com/azureml/openmpi4.1.0-ubuntu20.04
+  conda_file: ./env.yml
+
+instance_type: Standard_DS2_v2
+instance_count: 1
+
+# --- NEW: Add credentials for Content Safety ---
+environment_variables:
+  CONTENT_SAFETY_ENDPOINT: "https://contet-filtering.cognitiveservices.azure.com/"
+  CONTENT_SAFETY_KEY: "3fPYAI3uRSazcArssns99sg0XtaMYdIjAgq7t50OBvw3tiCDn4qEJQQJ99BLACqBBLyXJ3w3AAAHACOG9qqN"

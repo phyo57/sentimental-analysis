@@ -1,0 +1,202 @@
+{
+    "definition": {
+        "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+        "contentVersion": "1.0.0.0",
+        "triggers": {
+            "When_an_HTTP_request_is_received": {
+                "type": "Request",
+                "kind": "Http",
+                "inputs": {
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "facebookUrl": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "actions": {
+            "For_each": {
+                "foreach": "@body('Filter_array')",
+                "actions": {
+                    "Translate_text": {
+                        "type": "ApiConnection",
+                        "inputs": {
+                            "host": {
+                                "connection": {
+                                    "name": "@parameters('$connections')['translatorv2']['connectionId']"
+                                }
+                            },
+                            "method": "post",
+                            "body": {
+                                "Text": "@{items('For_each')}"
+                            },
+                            "path": "/Translate",
+                            "queries": {
+                                "to": "en"
+                            }
+                        }
+                    },
+                    "Append_to_array_variable": {
+                        "runAfter": {
+                            "Append_to_array_variable_1": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "AppendToArrayVariable",
+                        "inputs": {
+                            "name": "TranslatedPosts",
+                            "value": "@body('Translate_text')"
+                        }
+                    },
+                    "Append_to_array_variable_1": {
+                        "runAfter": {
+                            "Translate_text": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "AppendToArrayVariable",
+                        "inputs": {
+                            "name": "OriginalPosts",
+                            "value": "@items('For_each')"
+                        }
+                    }
+                },
+                "runAfter": {
+                    "OriginalPosts": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "Foreach"
+            },
+            "HTTP_Apify_Web_Scraping": {
+                "runAfter": {},
+                "type": "Http",
+                "inputs": {
+                    "uri": "https://api.apify.com/v2/acts/apify~facebook-posts-scraper/run-sync-get-dataset-items?token=apify_api_[put_your_api_key&remove_brackets]&fields=text",
+                    "method": "POST",
+                    "body": {
+                        "startUrls": [
+                            {
+                                "url": "@{triggerBody()?['facebookUrl']}"
+                            }
+                        ],
+                        "resultsLimit": 10
+                    }
+                },
+                "runtimeConfiguration": {
+                    "contentTransfer": {
+                        "transferMode": "Chunked"
+                    }
+                }
+            },
+            "Select": {
+                "runAfter": {
+                    "HTTP_Apify_Web_Scraping": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "Select",
+                "inputs": {
+                    "from": "@body('HTTP_Apify_Web_Scraping')",
+                    "select": "@item()?['text']"
+                }
+            },
+            "Filter_array": {
+                "runAfter": {
+                    "Select": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "Query",
+                "inputs": {
+                    "from": "@body('Select')",
+                    "where": "@and(not(equals(item(), null)), not(equals(item(), '')))"
+                }
+            },
+            "HTTP_DistilBERT": {
+                "runAfter": {
+                    "For_each": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "Http",
+                "inputs": {
+                    "uri": "https://distil-bert-final-model-endpoint.eastasia.inference.ml.azure.com/score",
+                    "method": "POST",
+                    "headers": {
+                        "Authorization": "Bearer 50EjQHiry0M1UElusZKKky7l3uXHSOdPcBC2vlR9dRWkSb12RM1GJQQJ99BKAAAAAAAAAAAAINFRAZML20Qr",
+                        "Content-Type": "application/json"
+                    },
+                    "body": {
+                        "inputs": "@variables('TranslatedPosts')",
+                        "original_text": "@variables('OriginalPosts')"
+                    }
+                },
+                "runtimeConfiguration": {
+                    "contentTransfer": {
+                        "transferMode": "Chunked"
+                    }
+                }
+            },
+            "Response": {
+                "runAfter": {
+                    "HTTP_DistilBERT": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "Response",
+                "kind": "Http",
+                "inputs": {
+                    "statusCode": 200,
+                    "body": "@body('HTTP_DistilBERT')"
+                }
+            },
+            "OriginalPosts": {
+                "runAfter": {
+                    "Filter_array": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "TranslatedPosts",
+                            "type": "array",
+                            "value": []
+                        },
+                        {
+                            "name": "OriginalPosts",
+                            "type": "array",
+                            "value": []
+                        }
+                    ]
+                }
+            }
+        },
+        "outputs": {},
+        "parameters": {
+            "$connections": {
+                "type": "Object",
+                "defaultValue": {}
+            }
+        }
+    },
+    "parameters": {
+        "$connections": {
+            "type": "Object",
+            "value": {
+                "translatorv2": {
+                    "id": "/subscriptions/48582a1d-388e-4ddf-adf2-54a0db4fae5e/providers/Microsoft.Web/locations/eastasia/managedApis/translatorv2",
+                    "connectionId": "/subscriptions/48582a1d-388e-4ddf-adf2-54a0db4fae5e/resourceGroups/FTLM-BERT/providers/Microsoft.Web/connections/translatorv2",
+                    "connectionName": "translatorv2",
+                    "connectionProperties": {}
+                }
+            }
+        }
+    }
+}

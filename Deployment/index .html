@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Mental Health Analytics</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 40px; max-width: 900px; margin: 0 auto; background-color: #f4f4f9; color: #333; }
+        h1 { text-align: center; color: #0078d4; }
+        
+        .input-group { display: flex; gap: 10px; justify-content: center; margin-bottom: 30px; }
+        input { width: 60%; padding: 12px; font-size: 16px; border: 1px solid #ddd; border-radius: 5px; outline: none; }
+        button { padding: 12px 25px; font-size: 16px; background: #0078d4; color: white; border: none; cursor: pointer; border-radius: 5px; font-weight: bold; transition: background 0.3s; }
+        button:hover { background: #005a9e; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+
+        #status { text-align: center; margin-bottom: 20px; font-size: 1.1em; font-weight: 500; min-height: 1.5em; }
+        .loader { border: 4px solid #f3f3f3; border-top: 4px solid #0078d4; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; margin: 10px auto; display: none; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        .chart-container { position: relative; height: 350px; width: 100%; margin: 20px 0; display: none; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        #resultsArea { display: none; margin-top: 40px; }
+        table { width: 100%; border-collapse: collapse; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.1); border-radius: 8px; overflow: hidden; }
+        th, td { padding: 15px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background-color: #0078d4; color: white; }
+        tr:hover { background-color: #f1f1f1; }
+        
+        .badge { padding: 6px 12px; border-radius: 20px; color: white; font-weight: bold; font-size: 0.85em; display: inline-block; min-width: 80px; text-align: center;}
+        
+        /* COLORS */
+        .label-Normal { background-color: #4CAF50; }
+        .label-Stress { background-color: #9C27B0; }
+        .label-Anxiety { background-color: #FF9800; }
+        .label-Depression { background-color: #F44336; }
+        .label-Bipolar { background-color: #673AB7; }
+        .label-Suicidal { background-color: #795548; }
+        .label-Unknown { background-color: #999; }
+    </style>
+</head>
+<body>
+
+    <h1>Mental Health AI Analyzer</h1>
+    
+    <div class="input-group">
+        <input type="text" id="fbUrl" placeholder="Paste Profile URL (e.g. Facebook/Instagram)...">
+        <button onclick="startAnalysis()" id="btnAnalyze">Analyze Profile</button>
+    </div>
+    
+    <div id="status">Ready</div>
+    <div class="loader" id="loader"></div>
+
+    <div class="chart-container" id="chartContainer">
+        <canvas id="myChart"></canvas>
+    </div>
+
+    <div id="resultsArea">
+        <h3 id="resultHeader">Analysis Results</h3>
+        <table id="postsTable">
+            <thead>
+                <tr>
+                    <th style="width: 150px;">Status</th>
+                    <th>Post Content</th>
+                </tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+        </table>
+    </div>
+
+    <script>
+        const MAIN_APP_URL = "put_your_logic_app_url"; 
+
+        let myChart = null;
+
+        async function startAnalysis() {
+            const urlInput = document.getElementById('fbUrl');
+            const btn = document.getElementById('btnAnalyze');
+            const statusDiv = document.getElementById('status');
+            
+            if(!urlInput.value) { alert("Please enter a URL"); return; }
+
+            statusDiv.innerHTML = "Analyzing posts... Please wait...";
+            document.getElementById('loader').style.display = "block";
+            btn.disabled = true;
+            document.getElementById('chartContainer').style.display = 'none';
+            document.getElementById('resultsArea').style.display = 'none';
+
+            try {
+                const response = await fetch(MAIN_APP_URL, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ facebookUrl: urlInput.value })
+                });
+
+                if (!response.ok) throw new Error("Analysis failed: " + response.statusText);
+
+                // PYTHON NOW RETURNS A CLEAN LIST DIRECTLY
+                const data = await response.json();
+                processResults(data);
+
+            } catch (error) {
+                console.error(error);
+                statusDiv.innerHTML = "<span style='color:red'>Error: " + error.message + "</span>";
+                btn.disabled = false;
+                document.getElementById('loader').style.display = "none";
+            }
+        }
+
+        function processResults(data) {
+            // Check if data is array (it should be now)
+            if (!Array.isArray(data)) {
+                 if(data.body) data = data.body; // Fallback
+                 else { console.error("Invalid data", data); return; }
+            }
+
+            document.getElementById('resultHeader').innerText = `Analyzed ${data.length} posts successfully.`;
+            renderTable(data);
+            renderChart(data);
+            
+            document.getElementById('status').innerHTML = "<b>Analysis Complete!</b>";
+            document.getElementById('loader').style.display = "none";
+            document.getElementById('btnAnalyze').disabled = false;
+            document.getElementById('chartContainer').style.display = 'block';
+            document.getElementById('resultsArea').style.display = 'block';
+        }
+
+        function getLabelName(id) {
+            const map = { 0: "Anxiety", 1: "Bipolar", 2: "Depression", 3: "Normal", 4: "Personality Disorder", 5: "Stress", 6: "Suicidal" };
+            return map[id] || "Unknown";
+        }
+
+        function renderTable(data) {
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = ""; 
+            
+            data.forEach(item => {
+                const row = document.createElement('tr');
+                const labelName = getLabelName(item.prediction);
+                const badgeClass = `label-${labelName.split(' ')[0]}`;
+                
+                // item.text is already the Burmese text from Python
+                row.innerHTML = `
+                    <td><span class="badge ${badgeClass}">${labelName}</span></td>
+                    <td>${item.text}</td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        function renderChart(data) {
+            const ctx = document.getElementById('myChart').getContext('2d');
+            const counts = {};
+            data.forEach(item => { 
+                const label = getLabelName(item.prediction);
+                counts[label] = (counts[label] || 0) + 1; 
+            });
+
+            if (myChart) myChart.destroy();
+            myChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(counts),
+                    datasets: [{
+                        data: Object.values(counts),
+                        backgroundColor: ['#FF9800', '#673AB7', '#F44336', '#4CAF50', '#607D8B', '#9C27B0', '#795548']
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+            });
+        }
+    </script>
+</body>
+</html>
